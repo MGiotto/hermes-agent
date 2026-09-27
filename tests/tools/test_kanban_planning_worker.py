@@ -88,8 +88,18 @@ def test_dispatcher_pins_planning_lane_and_schema_denies_url(monkeypatch, tmp_pa
     assert "orchestrator-only" in denied["error"]
     monkeypatch.delenv("HERMES_KANBAN_PLANNING_WORKER")
     assert "kanban_attach_url" in _names(["kanban"]), "schema cache leaked planning mode"
+    other_profile = root / "profiles" / "hefesto"
+    other_profile.mkdir()
+    (other_profile / "config.yaml").write_text("platform_toolsets:\n  cli: [kanban]\n")
+    monkeypatch.setenv("HERMES_HOME", str(other_profile))
     monkeypatch.setenv("HERMES_PROFILE", "hefesto")
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_hefesto")
     assert "kanban_attach_url" in _names(["kanban"])
+    monkeypatch.setenv("HERMES_HOME", str(profile))
+    monkeypatch.setenv("HERMES_PROFILE", "argos")
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_argos")
+    monkeypatch.setenv("HERMES_KANBAN_PLANNING_WORKER", "1")
+    assert "kanban_attach_url" not in _names(["kanban"])
 
 
 def test_planning_worker_decomposes_on_isolated_dispatcher_board(monkeypatch, tmp_path):
