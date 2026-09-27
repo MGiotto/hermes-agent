@@ -102,6 +102,17 @@ def _check_kanban_orchestrator_mode() -> bool:
     return _visible(to_env_worker=False)
 
 
+def _planning_worker() -> bool:
+    """Dispatcher-pinned planning lane; never trust a tool argument for this grant."""
+    return bool(os.environ.get("HERMES_KANBAN_TASK")) and (
+        os.environ.get("HERMES_KANBAN_PLANNING_WORKER") == "1")
+
+
+@no_cache_check_fn
+def _check_kanban_url_attachment() -> bool:
+    return not _planning_worker() and _check_kanban_mode()
+
+
 # --- Shared helpers: validation failures raise _Reject; _kanban_handler renders it ---
 
 # Worker tools that terminate or transition a run's ownership. An unbound worker
@@ -981,6 +992,8 @@ def _download_url_with_cap(url: str, max_bytes: int) -> tuple[bytes, Optional[st
 def _handle_attach_url(args: dict, **kw) -> str:
     """Attach a file fetched server-side from an http(s) URL (shared size cap)."""
     from hermes_cli import kanban_db as kb
+    _check(not _planning_worker(),
+           "kanban_attach_url refused: dispatcher planning workers cannot fetch external URLs")
     tid = _worker_guard("kanban_attach_url", args)
     url = str(_require_text(args, "url")).strip()
     filename = args.get("filename") or args.get("title")
@@ -1217,6 +1230,8 @@ _TOOLS = (
     ("kanban_link", KANBAN_LINK_SCHEMA, _handle_link, "🔗"))
 
 for _name, _sch, _handler, _emoji in _TOOLS:
-    _gate = _check_kanban_orchestrator_mode if _name in _ORCHESTRATOR_TOOLS else _check_kanban_mode
+    _gate = (_check_kanban_orchestrator_mode if _name in _ORCHESTRATOR_TOOLS
+             else _check_kanban_url_attachment if _name == "kanban_attach_url"
+             else _check_kanban_mode)
     registry.register(name=_name, toolset="kanban", schema=_sch, handler=_handler, emoji=_emoji,
                       check_fn=_gate)

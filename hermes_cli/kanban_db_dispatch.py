@@ -2888,6 +2888,29 @@ def _default_spawn(task: Task, workspace: str, *, board: Optional[str] = None) -
     # kanban_comment reads HERMES_PROFILE for its default author; `-p` alone
     # doesn't set the env var.
     env["HERMES_PROFILE"] = profile_arg
+    # The root board's configured orchestrator is a planning lane, not an
+    # attachment downloader. Pin the lane at spawn time so the worker's schema
+    # and handler agree even though its HERMES_HOME points at its own profile.
+    # A failed root-config read must not accidentally grant URL egress.
+    from hermes_constants import reset_hermes_home_override, set_hermes_home_override
+    from hermes_cli.profiles import _get_default_hermes_home
+    from hermes_cli.config import load_config_readonly, read_raw_config_readonly
+    from hermes_cli.config_read_errors import FailedConfigRead
+    token = set_hermes_home_override(_get_default_hermes_home())
+    try:
+        if isinstance(read_raw_config_readonly(), FailedConfigRead):
+            raise ValueError("root config is unreadable")
+        configured = (load_config_readonly().get("kanban") or {}).get("orchestrator_profile")
+        orchestrator = normalize_profile_name(configured) if configured else None
+    except Exception:
+        _kb._log.warning("kanban worker: orchestrator profile unreadable; disabling URL attachments")
+        orchestrator = profile_arg
+    finally:
+        reset_hermes_home_override(token)
+    if orchestrator and profile_arg == orchestrator:
+        env["HERMES_KANBAN_PLANNING_WORKER"] = "1"
+    else:
+        env.pop("HERMES_KANBAN_PLANNING_WORKER", None)
     # This is the grant boundary: the dispatcher assigned this new worker's task.
     from agent.delegation_context import DELEGATED_CHILD_ENV_MARKER
     env.pop(DELEGATED_CHILD_ENV_MARKER, None)
