@@ -32,7 +32,8 @@ def test_dispatcher_pins_planning_lane_and_schema_denies_url(monkeypatch, tmp_pa
     profile.mkdir(parents=True)
     (root / "config.yaml").write_text("kanban:\n  orchestrator_profile: argos\n")
     (profile / "config.yaml").write_text(
-        "platform_toolsets:\n  cli: [kanban]\nagent:\n  disabled_toolsets: []\n")
+        "platform_toolsets:\n  cli: [kanban, web, terminal, file, code_execution, browser, connections]\n"
+        "agent:\n  disabled_toolsets: []\n")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("HERMES_HOME", str(root))
     monkeypatch.setattr(dispatch, "_resolve_hermes_argv", lambda: ["hermes"])

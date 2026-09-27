@@ -442,14 +442,16 @@ saved; `all` alone is not a Kanban opt-in.
 Dispatcher-owned workers receive their task lifecycle tools automatically.
 `delegate_task` children do not gain permission to mutate the board. When a task
 is assigned to `kanban.orchestrator_profile`, the dispatcher marks it as a
-planning worker: `kanban_attach_url` is absent from its schema and the handler
-refuses a stale/direct call before making a request. Other workers retain URL
-attachments. Planning workers can use `kanban_show` to inspect their own task
-and known child IDs, `kanban_create` with a stable `idempotency_key` per parent
-and role to avoid repeat fan-out, and `kanban_link` for dependencies. They do
-not receive `kanban_list` or `kanban_unblock`; finishing a parent automatically
-promotes its waiting children. This is not a general network sandbox: configure
-the planning profile's CLI toolsets to `kanban` only (no terminal, web, browser,
+planning worker: its CLI selection is pinned to `kanban` even if its profile
+configuration later enables other toolsets. `kanban_attach_url` is absent from
+its schema and the handler refuses a stale/direct call before making a
+request. Other workers retain URL attachments. Planning workers can use
+`kanban_show` to inspect their own task and known child IDs, `kanban_create`
+with a stable `idempotency_key` per parent and role to avoid repeat fan-out,
+and `kanban_link` for dependencies. They do not receive `kanban_list` or
+`kanban_unblock`; finishing a parent automatically promotes its waiting
+children. This is not a general network sandbox: keep the planning profile's
+CLI toolsets to `kanban` only as a second boundary (no terminal, web, browser,
 file, code execution, connection or plugin toolsets).
 
 ## How workers interact with the board

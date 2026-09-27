@@ -2698,7 +2698,8 @@ def _retag_legacy_worker_sessions(workspaces_root_path: str) -> None:
         _kb._log.debug("kanban worker: legacy session retag skipped (%s)", exc)
 
 
-def _worker_argv(task: Task, profile_arg: str, hermes_home: Optional[str]) -> list[str]:
+def _worker_argv(task: Task, profile_arg: str, hermes_home: Optional[str],
+                 *, planning_worker: bool = False) -> list[str]:
     """Build the ``hermes -p <profile> --cli ... chat -q ...`` worker command."""
     cmd = [
         *_resolve_hermes_argv(),
@@ -2726,7 +2727,8 @@ def _worker_argv(task: Task, profile_arg: str, hermes_home: Optional[str]) -> li
     # model at a different depth.
     if task.reasoning_effort:
         cmd.extend(["--reasoning", task.reasoning_effort])
-    worker_toolsets = _resolve_worker_cli_toolsets(hermes_home)
+    worker_toolsets = (["kanban"] if planning_worker
+                       else _resolve_worker_cli_toolsets(hermes_home))
     if worker_toolsets:
         cmd.extend(["--toolsets", ",".join(worker_toolsets)])
     cmd.extend(["chat", "-q", f"work kanban task {task.id}"])
@@ -2918,7 +2920,8 @@ def _default_spawn(task: Task, workspace: str, *, board: Optional[str] = None) -
     # older hermes builds on PATH that predate the flag's precedence.
     env.pop("HERMES_TUI", None)
 
-    cmd = _worker_argv(task, profile_arg, env.get("HERMES_HOME"))
+    cmd = _worker_argv(task, profile_arg, env.get("HERMES_HOME"),
+                       planning_worker=env.get("HERMES_KANBAN_PLANNING_WORKER") == "1")
     # A worker spawned by a managed systemd gateway must leave the gateway's
     # cgroup before startup; otherwise restarting the service kills the worker
     # that is performing the handoff.
