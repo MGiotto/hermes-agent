@@ -684,6 +684,8 @@ export const frOverrides = {
       'composer.focus': 'Mettre le focus sur le compositeur',
       'composer.modelPicker': 'Ouvrir le sélecteur de modèle',
       'composer.voice': 'Démarrer / arrêter la conversation vocale',
+      'composer.reasoningUp': 'Augmenter le niveau de raisonnement',
+      'composer.reasoningDown': 'Réduire le niveau de raisonnement',
       'view.toggleSidebar': 'Basculer la barre latérale des sessions',
       'view.cycleSidebarGrouping': 'Changer le regroupement des sessions',
       'view.toggleRightSidebar': "Basculer l'explorateur de fichiers",
@@ -4990,7 +4992,11 @@ export const frOverrides = {
     noAuthenticatedProviders: 'Aucun fournisseur authentifié.',
     addProvider: 'Ajouter un fournisseur…',
     addCustomModel: 'Ajouter un modèle personnalisé',
-    removeCustomModel: 'Retirer le modèle personnalisé'
+    removeCustomModel: 'Retirer le modèle personnalisé',
+    resetToDefaults: 'Rétablir les valeurs par défaut',
+    resetConfirm: 'Rétablir la visibilité des modèles par défaut ?',
+    resetDescription: 'Vos choix de modèles affichés et masqués sont effacés et chaque fournisseur retrouve sa liste par défaut. Les modèles personnalisés ajoutés sont conservés et affichés.',
+    resetAction: 'Rétablir'
   },
   shell: {
     windowControls: 'Contrôles de fenêtre',

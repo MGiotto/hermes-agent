@@ -454,6 +454,8 @@ export const zh = defineLocale({
       'composer.modelPicker': '打开模型选择器',
       'composer.voice': '开始 / 停止语音对话',
       'composer.dictate': '开始 / 停止听写',
+      'composer.reasoningUp': '提高推理等级',
+      'composer.reasoningDown': '降低推理等级',
       'view.toggleSidebar': '切换会话侧边栏',
       'view.toggleRightSidebar': '切换文件浏览器',
       'view.toggleReview': '切换审查面板',
@@ -4282,7 +4284,11 @@ export const zh = defineLocale({
     noAuthenticatedProviders: '没有已认证的提供方。',
     addProvider: '添加提供方…',
     addCustomModel: '添加自定义模型',
-    removeCustomModel: '移除自定义模型'
+    removeCustomModel: '移除自定义模型',
+    resetToDefaults: '恢复默认',
+    resetConfirm: '将模型可见性恢复为默认？',
+    resetDescription: '你对模型显示与隐藏的选择将被清除，每个提供方都会恢复默认列表。你添加的自定义模型会保留并显示。',
+    resetAction: '恢复'
   },
 
   shell: {
