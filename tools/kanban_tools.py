@@ -103,13 +103,20 @@ def _check_kanban_orchestrator_mode() -> bool:
 
 
 def _planning_worker() -> bool:
-    """Dispatcher-pinned planning lane; never trust a tool argument for this grant."""
+    """Dispatcher-pinned planning lane, independent of caller-supplied tool arguments."""
     return bool(os.environ.get("HERMES_KANBAN_TASK")) and (
         os.environ.get("HERMES_KANBAN_PLANNING_WORKER") == "1")
 
 
+# Besides fan-out, the lane needs only its own task lifecycle operations.
+_PLANNING_TOOLS = frozenset({
+    "kanban_show", "kanban_create", "kanban_link", "kanban_comment",
+    "kanban_complete", "kanban_block", "kanban_heartbeat",
+})
+
+
 @no_cache_check_fn
-def _check_kanban_url_attachment() -> bool:
+def _check_kanban_planning_restricted() -> bool:
     return not _planning_worker() and _check_kanban_mode()
 
 
@@ -169,6 +176,10 @@ def _kanban_handler(tool_name: str) -> Callable:
         @functools.wraps(fn)
         def wrapper(args: dict, **kw) -> str:
             try:
+                # Schema changes are not an authorization boundary: a stale or
+                # direct registry call still cannot escape the planning lane.
+                _check(not (_planning_worker() and tool_name not in _PLANNING_TOOLS),
+                       f"{tool_name}: unavailable to dispatcher planning workers")
                 # Reject typos before a handoff can succeed without its artifacts.
                 properties = registry.get_schema(tool_name)["parameters"]["properties"]
                 allowed = set(properties) | _UNDECLARED_ARGS.get(tool_name, frozenset())
@@ -1231,7 +1242,7 @@ _TOOLS = (
 
 for _name, _sch, _handler, _emoji in _TOOLS:
     _gate = (_check_kanban_orchestrator_mode if _name in _ORCHESTRATOR_TOOLS
-             else _check_kanban_url_attachment if _name == "kanban_attach_url"
+             else _check_kanban_planning_restricted if _name not in _PLANNING_TOOLS
              else _check_kanban_mode)
     registry.register(name=_name, toolset="kanban", schema=_sch, handler=_handler, emoji=_emoji,
                       check_fn=_gate)

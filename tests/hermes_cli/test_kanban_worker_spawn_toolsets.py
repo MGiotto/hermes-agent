@@ -56,7 +56,10 @@ agent:
 """.lstrip(),
         encoding="utf-8",
     )
-    root.joinpath("config.yaml").write_text("toolsets:\n  - kanban\n", encoding="utf-8")
+    # A worker gets profile CLI tools only with a verifiable root policy
+    # explicitly assigning orchestration to a different profile.
+    root.joinpath("config.yaml").write_text(
+        "toolsets:\n  - kanban\nkanban:\n  orchestrator_profile: argos\n", encoding="utf-8")
     monkeypatch.setenv("HERMES_HOME", str(root))
 
     from hermes_cli import kanban_db as kb

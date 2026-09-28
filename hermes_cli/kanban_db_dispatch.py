@@ -2707,11 +2707,11 @@ def _worker_argv(task: Task, profile_arg: str, hermes_home: Optional[str],
         # A worker must NEVER boot the interactive TUI: its no-TTY bail-out
         # exits 0 without doing the task → "protocol violation" every attempt.
         "--cli",
-        # Workers run under a profile-scoped HERMES_HOME and so see that
-        # profile's shell-hook allowlist; pass --accept-hooks explicitly so
-        # configured hooks still register.
-        "--accept-hooks",
     ]
+    # Planning tasks never explicitly approve profile-configured shell hooks.
+    # Ordinary workers retain their existing hook behavior.
+    if not planning_worker:
+        cmd.append("--accept-hooks")
     # One `--skills X` pair per name: easier to read in `ps` and avoids quoting
     # ambiguity if a skill name contains unusual chars.
     for sk in task.skills or ():
@@ -2890,27 +2890,38 @@ def _default_spawn(task: Task, workspace: str, *, board: Optional[str] = None) -
     # kanban_comment reads HERMES_PROFILE for its default author; `-p` alone
     # doesn't set the env var.
     env["HERMES_PROFILE"] = profile_arg
-    # The root board's configured orchestrator is a planning lane, not an
-    # attachment downloader. Pin the lane at spawn time so the worker's schema
-    # and handler agree even though its HERMES_HOME points at its own profile.
-    # A failed root-config read must not accidentally grant URL egress.
+    # The board-wide orchestrator setting belongs to the default home, not the
+    # assignee's profile home. A missing, unreadable or ambiguous root policy
+    # cannot identify which assignee is the planner: restrict this worker until
+    # an explicit, valid root orchestrator_profile is available. Do not trust
+    # merged defaults or profile-scoped settings at this authorization boundary.
     from hermes_constants import reset_hermes_home_override, set_hermes_home_override
-    from hermes_cli.profiles import _get_default_hermes_home
-    from hermes_cli.config import load_config_readonly, read_raw_config_readonly
+    from hermes_cli.profiles import _get_default_hermes_home, validate_profile_name
+    from hermes_cli.config import read_raw_config_readonly
     from hermes_cli.config_read_errors import FailedConfigRead
-    token = set_hermes_home_override(_get_default_hermes_home())
+    root_token = set_hermes_home_override(_get_default_hermes_home())
     try:
-        if isinstance(read_raw_config_readonly(), FailedConfigRead):
-            raise ValueError("root config is unreadable")
-        configured = (load_config_readonly().get("kanban") or {}).get("orchestrator_profile")
-        orchestrator = normalize_profile_name(configured) if configured else None
+        raw = read_raw_config_readonly()
+        if isinstance(raw, FailedConfigRead):
+            raise ValueError("unreadable orchestrator policy")
+        kanban_policy = raw.get("kanban")
+        configured = kanban_policy.get("orchestrator_profile") if isinstance(kanban_policy, dict) else None
+        if not isinstance(configured, str) or not configured.strip():
+            raise ValueError("missing orchestrator policy")
+        orchestrator = normalize_profile_name(configured)
+        validate_profile_name(orchestrator)
     except Exception:
-        _kb._log.warning("kanban worker: orchestrator profile unreadable; disabling URL attachments")
+        _kb._log.warning("kanban worker: root orchestrator policy unverifiable; restricting worker")
         orchestrator = profile_arg
     finally:
-        reset_hermes_home_override(token)
-    if orchestrator and profile_arg == orchestrator:
+        reset_hermes_home_override(root_token)
+    planning_worker = bool(orchestrator and profile_arg == orchestrator)
+    if planning_worker:
         env["HERMES_KANBAN_PLANNING_WORKER"] = "1"
+        # SAFE_MODE alone (without --safe-mode's config bypass) suppresses
+        # profile hooks, webhooks and plugin discovery during this child run.
+        env["HERMES_SAFE_MODE"] = "1"
+        env.pop("HERMES_ACCEPT_HOOKS", None)
     else:
         env.pop("HERMES_KANBAN_PLANNING_WORKER", None)
     # This is the grant boundary: the dispatcher assigned this new worker's task.
@@ -2921,7 +2932,7 @@ def _default_spawn(task: Task, workspace: str, *, board: Optional[str] = None) -
     env.pop("HERMES_TUI", None)
 
     cmd = _worker_argv(task, profile_arg, env.get("HERMES_HOME"),
-                       planning_worker=env.get("HERMES_KANBAN_PLANNING_WORKER") == "1")
+                       planning_worker=planning_worker)
     # A worker spawned by a managed systemd gateway must leave the gateway's
     # cgroup before startup; otherwise restarting the service kills the worker
     # that is performing the handoff.

@@ -696,6 +696,12 @@ def test_default_spawn_does_not_auto_load_any_skill(kanban_home, monkeypatch):
         return FakeProc()
 
     monkeypatch.setattr("subprocess.Popen", fake_popen)
+    # An ordinary worker only keeps --accept-hooks when the root policy verifiably
+    # names a DIFFERENT profile as the planner. Without that evidence the dispatcher
+    # restricts the worker to the planning lane (which drops --accept-hooks); that
+    # fail-closed path is covered by tests/tools/test_kanban_planning_worker.py.
+    (kanban_home / "config.yaml").write_text(
+        "kanban:\n  orchestrator_profile: argos\n", encoding="utf-8")
 
     conn = kbc.connect()
     try:
