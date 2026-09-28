@@ -57,7 +57,12 @@ agent:
         encoding="utf-8",
     )
     # A worker gets profile CLI tools only with a verifiable root policy
-    # explicitly assigning orchestration to a different profile.
+    # explicitly assigning orchestration to a different profile. "Verifiable"
+    # includes the named planner existing on disk, so `profiles/argos` is
+    # created here: a policy pointing at a profile that is not there cannot
+    # identify the planner and restricts every worker instead.
+    (root / "profiles" / "argos").mkdir()
+    (root / "profiles" / "argos" / "config.yaml").write_text("{}\n", encoding="utf-8")
     root.joinpath("config.yaml").write_text(
         "toolsets:\n  - kanban\nkanban:\n  orchestrator_profile: argos\n", encoding="utf-8")
     monkeypatch.setenv("HERMES_HOME", str(root))

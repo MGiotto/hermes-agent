@@ -2896,10 +2896,14 @@ def _default_spawn(task: Task, workspace: str, *, board: Optional[str] = None) -
     # an explicit, valid root orchestrator_profile is available. Do not trust
     # merged defaults or profile-scoped settings at this authorization boundary.
     from hermes_constants import reset_hermes_home_override, set_hermes_home_override
-    from hermes_cli.profiles import _get_default_hermes_home, validate_profile_name
+    from hermes_cli.profiles import _get_default_hermes_home, profile_exists, validate_profile_name
     from hermes_cli.config import read_raw_config_readonly
     from hermes_cli.config_read_errors import FailedConfigRead
     root_token = set_hermes_home_override(_get_default_hermes_home())
+    # Set only when the policy NAMED a profile we then refused, so the operator
+    # can tell a typo/renamed/deleted planner from a policy that was simply
+    # absent. Never populated for the absent case: the log must not echo config.
+    policy_detail: Optional[str] = None
     try:
         raw = read_raw_config_readonly()
         if isinstance(raw, FailedConfigRead):
@@ -2910,8 +2914,28 @@ def _default_spawn(task: Task, workspace: str, *, board: Optional[str] = None) -
             raise ValueError("missing orchestrator policy")
         orchestrator = normalize_profile_name(configured)
         validate_profile_name(orchestrator)
+        # A syntactically valid name is not evidence that a planner exists.
+        # `validate_profile_name` checks shape and reserved words only, so a
+        # typo, a renamed planner or a deleted profile left
+        # `profile_arg == orchestrator` permanently false — which releases
+        # EVERY worker unrestricted, reopening the lane this branch closes.
+        # Existence is therefore part of "verifiable policy", and the same
+        # missing/unverifiable branch restricts.
+        if orchestrator == "default":
+            # The alias for the operator's own main profile is not a named
+            # planner: honouring it would confine that profile to the planning
+            # lane by config alone, and it can never report "profile missing".
+            policy_detail = (f"orchestrator_profile {orchestrator!r} is the default "
+                             "profile alias, not a named planner")
+            raise ValueError(policy_detail)
+        if not profile_exists(orchestrator):
+            policy_detail = f"orchestrator_profile {orchestrator!r} names no live profile on disk"
+            raise ValueError(policy_detail)
     except Exception:
-        _kb._log.warning("kanban worker: root orchestrator policy unverifiable; restricting worker")
+        _kb._log.warning(
+            "kanban worker: root orchestrator policy unverifiable; restricting worker%s",
+            f" ({policy_detail})" if policy_detail else "",
+        )
         orchestrator = profile_arg
     finally:
         reset_hermes_home_override(root_token)

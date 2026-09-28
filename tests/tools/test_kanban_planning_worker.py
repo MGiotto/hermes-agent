@@ -38,6 +38,13 @@ def test_dispatcher_pins_planning_lane_and_schema_denies_url(monkeypatch, tmp_pa
     (profile / "config.yaml").write_text(
         "platform_toolsets:\n  cli: [kanban, web, terminal, file, code_execution, browser, connections]\n"
         "agent:\n  disabled_toolsets: []\n")
+    # The policy below rotates the planner between these two profiles, and a
+    # policy is only verifiable when the profile it names is live on disk —
+    # a name with no profile behind it restricts (see the argoz/ghost rows of
+    # test_unverifiable_root_policy_denies_egress_with_isolated_board).
+    (root / "profiles" / "hefesto").mkdir()
+    (root / "profiles" / "hefesto" / "config.yaml").write_text(
+        "platform_toolsets:\n  cli: [kanban, web, terminal, file]\n")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr(socket.socket, "connect", lambda *args: (_ for _ in ()).throw(
         AssertionError("network egress attempted")))
@@ -142,7 +149,7 @@ def test_dispatcher_pins_planning_lane_and_schema_denies_url(monkeypatch, tmp_pa
     monkeypatch.delenv("HERMES_SAFE_MODE")
     assert "kanban_attach_url" in _names(["kanban"]), "schema cache leaked planning mode"
     other_profile = root / "profiles" / "hefesto"
-    other_profile.mkdir()
+    other_profile.mkdir(exist_ok=True)
     (other_profile / "config.yaml").write_text("platform_toolsets:\n  cli: [kanban]\n")
     monkeypatch.setenv("HERMES_HOME", str(other_profile))
     monkeypatch.setenv("HERMES_PROFILE", "hefesto")
@@ -166,6 +173,18 @@ def test_dispatcher_pins_planning_lane_and_schema_denies_url(monkeypatch, tmp_pa
     "kanban:\n  orchestrator_profile: argos\n  orchestrator_profile: hefesto\n",
     "[kanban, argos]\n",  # non-mapping document
     "__permission_error__",  # explicit FailedConfigRead, not an empty mapping
+    # Syntactically valid, but no such live profile: a typo, a renamed planner
+    # or a deleted one. `validate_profile_name` checks shape only, so these used
+    # to be treated as verifiable policy — and since the name never equals the
+    # assignee, EVERY worker (including the intended planner) was released
+    # unrestricted. Shape-valid is not evidence a planner exists.
+    "kanban:\n  orchestrator_profile: argoz\n",
+    "kanban:\n  orchestrator_profile: ghost\n",
+    "kanban:\n  orchestrator_profile: argoss\n",
+    # The `default` alias is a live profile, but it is the operator's own main
+    # profile, not a named planner: honouring it would confine that profile to
+    # the planning lane by config alone.
+    "kanban:\n  orchestrator_profile: default\n",
 ])
 def test_unverifiable_root_policy_denies_egress_with_isolated_board(monkeypatch, tmp_path, root_config):
     from hermes_cli import kanban_db as kb, kanban_db_connect as kbc

@@ -452,12 +452,18 @@ refuse direct calls. They cannot `kanban_unblock` or access terminal, file,
 browser, web or connection tools.
 A missing, unreadable or malformed root `~/.hermes/config.yaml`, or one
 without an explicit valid `kanban.orchestrator_profile`, cannot identify the
-planner. In that case **every newly spawned worker** uses the restricted
+planner. "Valid" means a *named* profile that **exists on disk and is live**
+(not tombstoned): a typo, a renamed planner or a deleted one names nothing, and
+so does the `default` alias, which is your own main profile rather than a named
+planner. In every such case **every newly spawned worker** uses the restricted
 planning lane, including otherwise ordinary implementers, until the root
-policy is repaired (for example `kanban: {orchestrator_profile: planner}`).
-The dispatcher's authorization check uses the raw root value, not merged
-configuration defaults or a profile's own config. With a valid root value,
-only the named profile is restricted; other profiles retain their tools.
+policy is repaired (for example `kanban: {orchestrator_profile: planner}`,
+where `planner` is a real profile you created with `hermes profile create
+planner` - renaming or deleting it puts the policy back in this state, and
+`hermes logs` names the rejected value). The dispatcher's authorization check
+uses the raw root value, not merged configuration defaults or a profile's own
+config. With a valid root value, only the named profile is restricted; other
+profiles retain their tools.
 This is tool isolation, not an OS network sandbox; application/provider
 traffic remains necessary for the model, and workers already running before
 an edit are not retroactively confined.
