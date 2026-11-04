@@ -231,6 +231,15 @@ so adding the flag alone is **not** a privacy boundary.
   message caches and the gateway queue. For 20 minutes after a sensitive send,
   text containing six digits (including common spaces/hyphens) is also dropped
   for that recipient. Other ordinary conversation continues.
+- `capabilities.sensitiveTemporaryPasswords: "v1"` additionally advertises a
+  format-based guard for first-access passwords: standalone ten-character ASCII
+  alphanumeric tokens containing both a letter and a digit are filtered at intake,
+  case-insensitively and independently of the OTP window or sender mapping. This
+  covers the issuer's lowercase-letter/digit password format without retaining
+  passwords, checking their validity or expiring protection while a password may
+  remain usable. Incorrect tokens of the same shape are filtered too. NFKC and
+  zero-width normalization are covered; arbitrary obfuscation is not. Issuers of
+  first-access passwords must require this additional capability before sending.
 - Privacy windows survive restart in `hermes-private-windows.json` inside the
   selected session directory: mode `0600`, hashed chat identifiers and expiry
   only, no code or message text. Bad metadata fails startup; a failed metadata
@@ -246,7 +255,9 @@ so adding the flag alone is **not** a privacy boundary.
 This is a text/quote guard, **not general DLP**: images, audio, arbitrary
 obfuscation, renamed contacts and unrelated channels are not an all-secrets
 guarantee. The conservative six-digit window can also suppress unrelated numeric
-text. Tell recipients to enter codes only on the issuer's site, never in chat.
+text; the ten-character credential guard can suppress unrelated identifiers of
+that same shape anywhere in the bridge intake. Tell recipients to enter secrets
+only on the issuer's site, never in chat.
 No access-control policy changes or new agent privileges are implied.
 
 A separately packaged, reviewed bridge can be selected using the existing

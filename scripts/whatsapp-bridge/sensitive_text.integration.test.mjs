@@ -43,6 +43,7 @@ test('native HTTP send and real inbound pipeline isolate confidential text, echo
     assert.equal(health?.status, 'connected', 'Synthetic bridge must start without real credentials');
     assert.equal(health.accountFingerprint, createHash('sha256').update('5500000000001@s.whatsapp.net').digest('hex'));
     assert.equal(health.capabilities.sensitiveText, 'v1', 'Old bridges must not accept recovery traffic');
+    assert.equal(health.capabilities.sensitiveTemporaryPasswords, 'v1');
     const chat = '5500000000000@s.whatsapp.net';
     const code = '246802';
     const result = await (await fetch(`${base}/send`, {
@@ -52,11 +53,25 @@ test('native HTTP send and real inbound pipeline isolate confidential text, echo
     assert.equal(result.success, true);
     for (let attempt = 0; !sent.length && attempt < 20; attempt += 1) await delay(10);
     assert.ok(sent[0].text.includes('[HERMES_PRIVATE]'));
+    const password = 'ab2cdefg3h';
+    const temporary = await (await fetch(`${base}/send`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: chat, message: `Senha temporária sintética: ${password}`, sensitive: true }),
+    })).json();
+    assert.equal(temporary.success, true);
+    for (let attempt = 0; sent.length < 2 && attempt < 20; attempt += 1) await delay(10);
+    assert.equal(sent.length, 2);
     const quoted = { extendedTextMessage: { text: 'Onde digito?', contextInfo: { quotedMessage: { conversation: sent[0].text } } } };
     child.send({ kind: 'inject-inbound', messages: [
       { key: { id: 'in-private', remoteJid: chat }, message: { conversation: code } },
       { key: { id: 'in-quote', remoteJid: chat }, message: quoted },
       { key: { id: 'in-lid', remoteJid: '9999999999@lid', remoteJidAlt: chat }, message: { conversation: code } },
+      { key: { id: 'in-password', remoteJid: chat }, message: { conversation: password } },
+      { key: { id: 'in-password-lid', remoteJid: '9999999999@lid' }, message: { conversation: password } },
+      { key: { id: 'in-password-wrapped', remoteJid: chat }, message: { ephemeralMessage: { message: { conversation: password } } } },
+      { key: { id: 'in-password-quote', remoteJid: chat }, message: { extendedTextMessage: { text: 'Como uso?', contextInfo: {
+        quotedMessage: { conversation: sent[1].text },
+      } } } },
       { key: { id: 'in-normal', remoteJid: chat }, message: { conversation: 'Como funciona o inventário?' } },
       { key: { id: result.messageId, remoteJid: chat, fromMe: true }, message: { conversation: sent[0].text } },
     ] });
@@ -66,6 +81,8 @@ test('native HTTP send and real inbound pipeline isolate confidential text, echo
     assert.equal(queue[0].body, 'Como funciona o inventário?');
     assert.equal(JSON.stringify(queue).includes(code), false);
     assert.equal(diagnosticOutput.includes(code), false);
+    assert.equal(JSON.stringify(queue).includes(password), false);
+    assert.equal(diagnosticOutput.includes(password), false);
   } finally {
     if (child.exitCode === null) {
       const exited = new Promise(resolve => child.once('exit', resolve));

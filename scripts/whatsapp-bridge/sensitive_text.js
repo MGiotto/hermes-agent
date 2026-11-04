@@ -70,6 +70,14 @@ function textContainsCode(value) {
   return /(?<![0-9])[0-9]{6}(?![0-9])/u.test(compact);
 }
 
+function textContainsTemporaryPassword(value) {
+  // First-access passwords do not expire with an OTP window. Match the format,
+  // never the actual secret: wrong guesses receive the same privacy treatment.
+  const normalized = value.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '');
+  const tokens = normalized.match(/(?<![a-z0-9])[a-z0-9]{10}(?![a-z0-9])/giu) || [];
+  return tokens.some(token => /[a-z]/iu.test(token) && /[0-9]/u.test(token));
+}
+
 export function createSensitiveTextGuard({ statePath, now = Date.now }) {
   let windows = loadWindows(statePath, now);
   return {
@@ -84,7 +92,7 @@ export function createSensitiveTextGuard({ statePath, now = Date.now }) {
       return `${SENSITIVE_TEXT_MARKER}\n${text}`;
     },
     shouldBlock(chatId, message) {
-      if (messageContains(message, textContainsMarker)) return true;
+      if (messageContains(message, textContainsMarker) || messageContains(message, textContainsTemporaryPassword)) return true;
       const rawIds = (Array.isArray(chatId) ? chatId : [chatId]).filter(Boolean);
       const ids = new Set(rawIds.flatMap(id => [...expandWhatsAppIdentifiers(id, path.dirname(statePath))]));
       const current = now();
