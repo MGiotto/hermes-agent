@@ -205,6 +205,45 @@ The gateway starts the WhatsApp bridge automatically using the saved session.
 
 ---
 
+## Sensitive text through the local bridge
+
+Applications issuing short-lived authentication codes can opt into the local
+`POST /send` contract with `sensitive: true`. This is direct transport, not an
+agent turn. Clients must first inspect `/health` and require
+`capabilities.sensitiveText: "v1"`; older bridges ignore unknown request fields,
+so adding the flag alone is **not** a privacy boundary.
+
+- Sensitive text gets a `[HERMES_PRIVATE]` marker and must fit one message. Its
+  body is not added to the bridge's sent-message lookup cache. Delivery failures
+  return a fixed error instead of a provider exception.
+- Incoming text or quotes containing the marker are dropped before downloads,
+  message caches and the gateway queue. For 20 minutes after a sensitive send,
+  text containing six digits (including common spaces/hyphens) is also dropped
+  for that recipient. Other ordinary conversation continues.
+- Privacy windows survive restart in `hermes-private-windows.json` inside the
+  selected session directory: mode `0600`, hashed chat identifiers and expiry
+  only, no code or message text. Bad metadata fails startup; a failed metadata
+  write prevents the sensitive send. Keep this file with its owning session.
+- PN/LID aliases are resolved through the existing mapping files and alternate
+  phone JID. An unresolved LID is conservatively filtered for six-digit text
+  while any privacy window is active; no sender identity or access is inferred.
+- `/health` reports `mode`, the exact `session`, `accountFingerprint` (SHA-256 of
+  the normalized socket user JID, without its device suffix), and
+  `capabilities.sensitiveWindowSeconds`. Pin the approved bot identity/session
+  and require the window to cover the issuer's whole code lifetime.
+
+This is a text/quote guard, **not general DLP**: images, audio, arbitrary
+obfuscation, renamed contacts and unrelated channels are not an all-secrets
+guarantee. The conservative six-digit window can also suppress unrelated numeric
+text. Tell recipients to enter codes only on the issuer's site, never in chat.
+No access-control policy changes or new agent privileges are implied.
+
+A separately packaged, reviewed bridge can be selected using the existing
+`platforms.whatsapp.extra.bridge_script` setting. Keep its dependencies pinned,
+preserve the existing paired session and switch only with a controlled restart;
+never run two writers against one session. Restart after helper-module changes
+as well: `scriptHash` fingerprints `bridge.js`, not every imported module.
+
 ## Session Persistence
 
 The Baileys bridge saves its session under `~/.hermes/platforms/whatsapp/session`. This means:

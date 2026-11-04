@@ -33,6 +33,7 @@ import qrcode from 'qrcode-terminal';
 import { matchesAllowedSender, matchesAllowedUser, matchesInboundWhatsAppGroup, parseAllowedUsers } from './allowlist.js';
 import { createOutboundIdTracker } from './outbound_ids.js';
 import { classifyOwnerMessageGate } from './owner_message_gate.js';
+import { createSensitiveTextGuard, SENSITIVE_TEXT_WINDOW_SECONDS } from './sensitive_text.js';
 import {
   addMentions,
   buildPollPayload,
@@ -95,6 +96,7 @@ const SEND_READ_RECEIPTS =
 
 const PORT = parseInt(getArg('port', '3000'), 10);
 const SESSION_DIR = getArg('session', path.join(process.env.HOME || '~', '.hermes', 'whatsapp', 'session'));
+const sensitiveTextGuard = createSensitiveTextGuard({ statePath: path.join(SESSION_DIR, 'hermes-private-windows.json') });
 // Cache directories: the Python gateway passes the profile-aware paths via
 // env (HERMES_HOME-aware, new cache/ layout).  Fall back to the legacy
 // hardcoded locations for bridges launched outside the gateway.
@@ -667,6 +669,8 @@ async function startSocket() {
       }
 
       const messageContent = getMessageContent(msg);
+      // Before content downloads, message caches and the gateway/agent queue.
+      if (sensitiveTextGuard.shouldBlock([chatId, senderId, senderAltId], messageContent)) continue;
       if (messageContent.pollUpdateMessage) {
         const pollUpdateMessage = messageContent.pollUpdateMessage;
         const pollKey = pollUpdateMessage.pollCreationMessageKey || {
@@ -843,13 +847,18 @@ app.post('/send', async (req, res) => {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
 
-  const { chatId, message, replyTo, mentions } = req.body;
+  const { chatId, message, replyTo, mentions, sensitive = false } = req.body;
   if (!chatId || !message) {
     return res.status(400).json({ error: 'chatId and message are required' });
   }
+  if (typeof sensitive !== 'boolean' || (sensitive && (typeof chatId !== 'string' || typeof message !== 'string'))) {
+    return res.status(400).json({ error: 'Invalid sensitive message request' });
+  }
 
   try {
-    const chunks = splitLongMessage(formatOutgoingMessage(message));
+    const outgoing = sensitive ? sensitiveTextGuard.protectOutgoing(chatId, message) : message;
+    const chunks = splitLongMessage(formatOutgoingMessage(outgoing));
+    if (sensitive && chunks.length !== 1) return res.status(400).json({ error: 'Sensitive text must fit one message' });
     const messageIds = [];
     for (let i = 0; i < chunks.length; i += 1) {
       const { content: payload, options } = buildTextSendPayload(chunks[i], {
@@ -860,7 +869,7 @@ app.post('/send', async (req, res) => {
       });
       const sent = await sendWithTimeout(chatId, payload, options);
       trackSentMessageId(sent);
-      messageStore.remember(sent);
+      if (!sensitive) messageStore.remember(sent);
       if (sent?.key?.id) messageIds.push(sent.key.id);
       if (chunks.length > 1 && i < chunks.length - 1) {
         await sleep(CHUNK_DELAY_MS);
@@ -873,7 +882,7 @@ app.post('/send', async (req, res) => {
       messageIds,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: sensitive ? 'Sensitive message delivery failed' : err.message });
   }
 });
 
@@ -1128,13 +1137,16 @@ app.get('/chat/:id', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({
     status: connectionState,
+    mode: WHATSAPP_MODE,
+    accountFingerprint: sock?.user?.id
+      ? createHash('sha256').update(normalizeWhatsAppId(sock.user.id)).digest('hex') : '',
     queueLength: messageQueue.length,
     uptime: process.uptime(),
     scriptHash: SCRIPT_HASH,
     sendReadReceipts: SEND_READ_RECEIPTS,
     // path.resolve, not realpath: the adapter compares against os.path.abspath, which keeps symlinks.
     session: path.resolve(SESSION_DIR),
-    capabilities: { outboundMentions: true },
+    capabilities: { outboundMentions: true, sensitiveText: 'v1', sensitiveWindowSeconds: SENSITIVE_TEXT_WINDOW_SECONDS },
   });
 });
 
