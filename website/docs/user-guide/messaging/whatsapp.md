@@ -216,8 +216,10 @@ so adding the flag alone is **not** a privacy boundary.
 - Sensitive phone-JID sends first ask the same socket's `onWhatsApp` lookup for
   the canonical registered phone JID. This covers Brazilian ninth-digit aliases
   without changing an application's stored contact or blindly removing digits.
-  Only one existing result for the original phone or its Brazilian equivalent is
-  accepted; unavailable, ambiguous, unrelated or slow (over three seconds)
+  Only one unambiguous registered identity for the original phone or its Brazilian
+  mobile equivalent is accepted; duplicate answers for the same canonical JID
+  are collapsed, while distinct registered destinations are rejected. Unavailable,
+  ambiguous, unrelated or slow (over three seconds)
   lookups fail the sensitive send so the issuer can use its alternative channel.
   Both requested and canonical identities get the private reply window. This
   changes neither sender allowlists nor identity/enrollment authority; ordinary

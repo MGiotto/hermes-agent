@@ -27,3 +27,15 @@ test('missing, unregistered, malformed and ambiguous lookup answers fail closed'
 test('non-phone sensitive destinations retain their existing transport contract', async () => {
   assert.equal(await resolveSensitiveRecipient({}, 'synthetic-group@g.us'), 'synthetic-group@g.us');
 });
+
+test('Brazilian mobile aliases require one unambiguous registered identity', async () => {
+  const phone = '5500999990000';
+  const canonical = phone.slice(0, 4) + phone.slice(5);
+  for (const duplicateCanonical of [false, true]) {
+    const socket = { onWhatsApp: async (...numbers) => numbers.map(number => ({
+      jid: `${duplicateCanonical ? canonical : number}@s.whatsapp.net`,
+      exists: duplicateCanonical || number === canonical,
+    })) };
+    assert.equal(await resolveSensitiveRecipient(socket, `${phone}@s.whatsapp.net`), `${canonical}@s.whatsapp.net`);
+  }
+});
