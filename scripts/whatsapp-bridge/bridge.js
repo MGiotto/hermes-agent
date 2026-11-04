@@ -1148,7 +1148,7 @@ app.get('/health', (req, res) => {
     sendReadReceipts: SEND_READ_RECEIPTS,
     // path.resolve, not realpath: the adapter compares against os.path.abspath, which keeps symlinks.
     session: path.resolve(SESSION_DIR),
-    capabilities: { outboundMentions: true, sensitiveText: 'v1', sensitiveWindowSeconds: SENSITIVE_TEXT_WINDOW_SECONDS },
+    capabilities: { outboundMentions: true, sensitiveText: 'v1', sensitiveWindowSeconds: SENSITIVE_TEXT_WINDOW_SECONDS, sensitiveTemporaryPasswords: 'v1' },
   });
 });
 
