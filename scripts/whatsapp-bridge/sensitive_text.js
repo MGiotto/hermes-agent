@@ -73,10 +73,10 @@ function textContainsCode(value) {
 export function createSensitiveTextGuard({ statePath, now = Date.now }) {
   let windows = loadWindows(statePath, now);
   return {
-    protectOutgoing(chatId, text) {
+    protectOutgoing(chatId, text, aliases = []) {
       const current = now();
       const next = new Map([...windows].filter(([, expiry]) => expiry > current));
-      next.set(chatKey(chatId), current + PRIVATE_WINDOW_MS);
+      for (const id of [chatId, ...aliases]) next.set(chatKey(id), current + PRIVATE_WINDOW_MS);
       if (next.size > MAX_WINDOWS) throw new Error('Private message capacity reached');
       // Register privacy before sending: an immediate reply must already be covered.
       saveWindows(statePath, next);

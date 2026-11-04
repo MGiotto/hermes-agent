@@ -85,3 +85,17 @@ test('active code replies remain private across bridge restarts without storing 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('privacy covers both requested and provider-canonical phone identities', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'wa-canonical-private-'));
+  try {
+    const guard = loaded.createSensitiveTextGuard({ statePath: path.join(dir, 'windows.json') });
+    const requested = '5500999990000@s.whatsapp.net';
+    const canonical = '550099990000@s.whatsapp.net';
+    guard.protectOutgoing(canonical, 'Synthetic code: 246802', [requested]);
+    assert.equal(guard.shouldBlock(requested, { conversation: '246802' }), true);
+    assert.equal(guard.shouldBlock(canonical, { conversation: '246802' }), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

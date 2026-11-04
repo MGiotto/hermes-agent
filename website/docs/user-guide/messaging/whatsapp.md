@@ -213,6 +213,15 @@ agent turn. Clients must first inspect `/health` and require
 `capabilities.sensitiveText: "v1"`; older bridges ignore unknown request fields,
 so adding the flag alone is **not** a privacy boundary.
 
+- Sensitive phone-JID sends first ask the same socket's `onWhatsApp` lookup for
+  the canonical registered phone JID. This covers Brazilian ninth-digit aliases
+  without changing an application's stored contact or blindly removing digits.
+  Only one existing result for the original phone or its Brazilian equivalent is
+  accepted; unavailable, ambiguous, unrelated or slow (over three seconds)
+  lookups fail the sensitive send so the issuer can use its alternative channel.
+  Both requested and canonical identities get the private reply window. This
+  changes neither sender allowlists nor identity/enrollment authority; ordinary
+  non-sensitive sends retain their existing behavior.
 - Sensitive text gets a `[HERMES_PRIVATE]` marker and must fit one message. Its
   body is not added to the bridge's sent-message lookup cache. Delivery failures
   return a fixed error instead of a provider exception.
