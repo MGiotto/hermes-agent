@@ -10,6 +10,10 @@ export function makeWASocket() {
   const socket = {
     ev: events,
     user: { id: '5500000000001:1@s.whatsapp.net', lid: '9000000000001@lid' },
+    onWhatsApp: async (number) => [{
+      jid: `${number === '5500999990000' ? number.slice(0, 4) + number.slice(5) : number}@s.whatsapp.net`,
+      exists: true,
+    }],
     sendMessage: async (chatId, message) => {
       process.send({ kind: 'synthetic-send', chatId, text: message.text });
       return { key: { id: `lab-${Date.now()}`, remoteJid: chatId, fromMe: true }, message };

@@ -34,6 +34,7 @@ import { matchesAllowedSender, matchesAllowedUser, matchesInboundWhatsAppGroup, 
 import { createOutboundIdTracker } from './outbound_ids.js';
 import { classifyOwnerMessageGate } from './owner_message_gate.js';
 import { createSensitiveTextGuard, SENSITIVE_TEXT_WINDOW_SECONDS } from './sensitive_text.js';
+import { resolveSensitiveRecipient } from './sensitive_recipient.js';
 import {
   addMentions,
   buildPollPayload,
@@ -856,18 +857,19 @@ app.post('/send', async (req, res) => {
   }
 
   try {
-    const outgoing = sensitive ? sensitiveTextGuard.protectOutgoing(chatId, message) : message;
+    const destination = sensitive ? await resolveSensitiveRecipient(sock, chatId) : chatId;
+    const outgoing = sensitive ? sensitiveTextGuard.protectOutgoing(destination, message, [chatId]) : message;
     const chunks = splitLongMessage(formatOutgoingMessage(outgoing));
     if (sensitive && chunks.length !== 1) return res.status(400).json({ error: 'Sensitive text must fit one message' });
     const messageIds = [];
     for (let i = 0; i < chunks.length; i += 1) {
       const { content: payload, options } = buildTextSendPayload(chunks[i], {
-        chatId,
+        chatId: destination,
         replyTo: i === 0 ? replyTo : undefined,
         mentions: i === 0 ? mentions : undefined,
         messageStore,
       });
-      const sent = await sendWithTimeout(chatId, payload, options);
+      const sent = await sendWithTimeout(destination, payload, options);
       trackSentMessageId(sent);
       if (!sensitive) messageStore.remember(sent);
       if (sent?.key?.id) messageIds.push(sent.key.id);
